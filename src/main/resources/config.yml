@@ -1,0 +1,11 @@
+exex_interval_hour: 1
+bad_value: 0.500
+good_value: 0.500
+jail_command: "jail %s himawari"
+mute_command: "mute %s"
+tp_command: "tp %s %s"
+unjail_command: "unjail %s"
+unmute_command: "mute %s"
+ban_command: "ban %s %s"
+unban_command: "unban %s"
+is_debug: false

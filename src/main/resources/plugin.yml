@@ -1,0 +1,39 @@
+main: space.gorogoro.kubotanutil2.KubotanUtil2
+name: KubotanUtil2
+version: 1.1
+api-version: 1.15
+description: kubotanプラグイン
+author: kubotan
+website: http://blog.gorogoro.space/
+
+commands:
+  bad:
+    description: 指定されたプレイヤーに悪い評価をします
+    usage: §c/<command> (player name) (reason)§7- 指定されたプレイヤーに悪い評価をします。理由(reason)は必須です。
+  good:
+    description: 指定されたプレイヤーに良い評価をします
+    usage: §c/<command> (player name) §7- 指定されたプレイヤーに良い評価をします。理由(reason)は必須です。
+  status:
+    description: 自分のステータスを表示します
+    usage: §c/<command> §7- 自分のステータスを表示します
+  kjail:
+    description: 指定されたプレイヤーを投獄します
+    usage: §c/<command> (player name) §7- 指定されたプレイヤーを投獄(mute/jailを含む)します。
+  kunjail:
+    description: 指定されたプレイヤーを釈放します
+    usage: §c/<command> (player name) §7- 指定されたプレイヤーを釈放(mute/unjailを含む)します。
+  kban:
+    description: 指定されたプレイヤーをBANします
+    usage: §c/<command> (player name) (reason) §7- 指定されたプレイヤーをBANします。
+  kunban:
+    description: 指定されたプレイヤーをUNBANします
+    usage: §c/<command> (player name) §7- 指定されたプレイヤーをUNBANします。
+  update:
+    description: 管理用
+    usage: §c/<command> (yyyy-MM-dd HH:mm:ss) §7- 指定された日時で最終実行日時をセットします
+  upvalue:
+    description: 管理用
+    usage: §c/<command> (player name) (9.999|-9.999) §7- 指定された値でreputationをセットします
+  isjailed:
+    description: BAN済みプレイヤー、投獄者か確認します
+    usage: §c/<command> (player name) §7- 指定されたプレイヤーがBAN済みか、もしくは、投獄されているか確認します。
