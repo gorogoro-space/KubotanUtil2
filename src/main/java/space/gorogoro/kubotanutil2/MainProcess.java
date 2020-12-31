@@ -5,6 +5,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -54,10 +56,11 @@ class MainProcess {
     return true;
   }
 
-  public static boolean status(Connection con, Player sp) throws SQLException{
+  public static boolean status(Connection con, Player sp, Boolean isCommand) throws SQLException{
     PreparedStatement prepStmt;
     ResultSet rs;
     double reputation = 0;
+
     prepStmt = con.prepareStatement("SELECT reputation, last_executed_at FROM users WHERE uuid=?");
     prepStmt.setString(1,sp.getUniqueId().toString());
     rs = prepStmt.executeQuery();
@@ -68,6 +71,41 @@ class MainProcess {
         sp.sendMessage(" reputationが1.000未満です！");
         sp.sendMessage(" goodしてもらえるようなアクションをしてみましょう！");
       }
+    }
+
+    if(isCommand) {
+      sp.sendMessage("=== 評価履歴を表示します ===");
+      prepStmt = con.prepareStatement("SELECT reason,created_at,last_executed_type FROM last_executed_history WHERE target_uuid=? and created_at >= datetime('2021-01-01 00:00:00')");
+      prepStmt.setString(1,sp.getUniqueId().toString());
+      rs = prepStmt.executeQuery();
+      String label = "";
+      String created_at = "";
+      int rownum = 0;
+      SimpleDateFormat ymdhis = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+      SimpleDateFormat ymd = new SimpleDateFormat("yyyy/MM/dd");
+      Date datetime;
+      while(rs.next()){
+        rownum++;
+        if(rs.getInt(3) == LAST_EXECUTED_TYPE_BAD){
+          label="  bad ";
+        }else if(rs.getInt(3) == LAST_EXECUTED_TYPE_GOOD){
+          label="  good ";
+        }
+        created_at = "";
+        if(!rs.getString(2).isEmpty()) {
+          try {
+            datetime = ymdhis.parse(rs.getString(2));
+            created_at = ymd.format(datetime);
+          } catch (Exception e) {
+            sp.sendMessage("評価の作成日取得でエラーが発生しました。");
+          }
+        }
+        sp.sendMessage(label + "reason:" + rs.getString(1) + " (" + created_at + ")");
+      }
+      if(rownum <= 0) {
+        sp.sendMessage("  評価履歴は0件です");
+      }
+      sp.sendMessage("※2021/01/01より古いデータは見れません");
     }
     return true;
   }

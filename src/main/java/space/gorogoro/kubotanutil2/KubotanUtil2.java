@@ -199,10 +199,10 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
         con.commit();
         prepStmt.close();
       }
-      
+
       // 現在の情報を表示
       event.getPlayer().sendMessage("ようこそ " + event.getPlayer().getName() + " さん♪");
-      MainProcess.status(con, event.getPlayer());
+      MainProcess.status(con, event.getPlayer(), false);
     } catch (SQLException e) {
       BukkitUtil.logStackMessage(e);
     }
@@ -231,7 +231,7 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
                 MainProcess.reasonOp(con, sp, args);
               }
             }else{
-              ret = MainProcess.status(con, sp);
+              ret = MainProcess.status(con, sp, true);
             }
             return ret;
           }else if( command.getName().equals("isjailed") ) {
