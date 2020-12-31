@@ -133,6 +133,40 @@ class MainProcess {
         " last_executed_at:" + rs.getString(2)
       );
     }
+
+    sp.sendMessage("=== 評価履歴を表示します ===");
+    prepStmt = con.prepareStatement("SELECT reason,sender_playername,created_at,last_executed_type FROM last_executed_history WHERE target_uuid=? and created_at >= datetime('2021-01-01 00:00:00')");
+    prepStmt.setString(1,tp.getUniqueId().toString());
+    rs = prepStmt.executeQuery();
+    String label = "";
+    String created_at = "";
+    int rownum = 0;
+    SimpleDateFormat ymdhis = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+    SimpleDateFormat ymd = new SimpleDateFormat("yyyy/MM/dd hh:mm:ss");
+    Date datetime;
+    while(rs.next()){
+      rownum++;
+      if(rs.getInt(4) == LAST_EXECUTED_TYPE_BAD){
+        label="  bad ";
+      }else if(rs.getInt(4) == LAST_EXECUTED_TYPE_GOOD){
+        label="  good ";
+      }
+      created_at = "";
+      if(!rs.getString(3).isEmpty()) {
+        try {
+          datetime = ymdhis.parse(rs.getString(3));
+          created_at = ymd.format(datetime);
+        } catch (Exception e) {
+          sp.sendMessage("評価の作成日取得でエラーが発生しました。");
+        }
+      }
+      sp.sendMessage(label + "reason:" + rs.getString(1) + " by " + rs.getString(2) + " (" + created_at + ")");
+    }
+    if(rownum <= 0) {
+      sp.sendMessage("  評価履歴は0件です");
+    }
+    sp.sendMessage("※2021/01/01より古いデータは見れません");
+
     return true;
   }
 
