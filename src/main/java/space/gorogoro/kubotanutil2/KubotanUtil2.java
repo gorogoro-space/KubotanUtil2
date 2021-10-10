@@ -73,9 +73,10 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
         + ",unique(sender_uuid, target_uuid, last_executed_type)"
         + ");"
       );
-      stmt.executeUpdate("CREATE INDEX IF NOT EXISTS last_uuid_type_index ON last_executed_history (sernder_uuid, target_uuid, last_executed_type);");
+      stmt.executeUpdate("CREATE INDEX IF NOT EXISTS last_uuid_type_index ON last_executed_history (sender_uuid, target_uuid, last_executed_type);");
       stmt.executeUpdate("CREATE INDEX IF NOT EXISTS sender_playername_index ON last_executed_history (sender_playername);");
       stmt.executeUpdate("CREATE INDEX IF NOT EXISTS target_playername_index ON last_executed_history (target_playername);");
+      con.commit();
       stmt.close();
 
     } catch (Exception e){
