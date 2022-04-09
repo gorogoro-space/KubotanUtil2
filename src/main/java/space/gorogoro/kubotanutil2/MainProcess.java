@@ -29,7 +29,7 @@ class MainProcess {
         return false;
       }
       Bukkit.dispatchCommand(Bukkit.getConsoleSender(), String.format(conf.getString("ban_command"), args[0], args[1]));
-      
+
       PreparedStatement prepStmt = con.prepareStatement("UPDATE users SET is_baned=? WHERE playername=?");
       prepStmt.setInt(1, IS_BANED_TRUE);
       prepStmt.setString(2, args[0]);
@@ -240,7 +240,7 @@ class MainProcess {
     return sub(LAST_EXECUTED_TYPE_GOOD, conf, con, sp, args);
   }
 
-  public static boolean jail(KubotanUtil2 plugin,Connection con , FileConfiguration conf, Player sp, String[] args){
+  public static boolean jail(KubotanUtil2 plugin, Connection con , FileConfiguration conf, Player sp, String[] args){
     try{
       if(args.length != 1){
         return false;
@@ -253,29 +253,34 @@ class MainProcess {
         return true;
       }
 
-      if(tp.getName() == sp.getName()){
-        sp.sendMessage("自分の投獄はできません");
-        return true;
-      }
-
-      String commandString = "";
-      commandString = String.format(conf.getString("jail_command"), tp.getName());
-      Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
-      commandString = String.format(conf.getString("mute_command"), tp.getName());
-      Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
-
-      PreparedStatement prepStmt = con.prepareStatement("UPDATE users SET is_jailed=? WHERE uuid=?");
-      prepStmt.setInt(1, 1);
-      prepStmt.setString(2, tp.getUniqueId().toString());
-      prepStmt.addBatch();
-      prepStmt.executeBatch();
-      con.commit();
-
-      sp.sendMessage("投獄しました。");
+      jail_proc(con, conf, sp, tp);
 
     } catch (Exception e) {
       BukkitUtil.logStackMessage(e);
     }
+    return true;
+  }
+
+  public static boolean jail_proc(Connection con , FileConfiguration conf, Player sp, OfflinePlayer tp) throws SQLException {
+
+    if(tp.getName() == sp.getName()){
+      sp.sendMessage("自分の投獄はできません");
+      return true;
+    }
+
+    String commandString = "";
+    commandString = String.format(conf.getString("jail_command"), tp.getName());
+    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
+    commandString = String.format(conf.getString("mute_command"), tp.getName());
+    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
+
+    PreparedStatement prepStmt = con.prepareStatement("UPDATE users SET is_jailed=? WHERE uuid=?");
+    prepStmt.setInt(1, 1);
+    prepStmt.setString(2, tp.getUniqueId().toString());
+    prepStmt.addBatch();
+    prepStmt.executeBatch();
+    con.commit();
+    sp.sendMessage("投獄しました。");
     return true;
   }
 
@@ -393,7 +398,6 @@ class MainProcess {
       }
       if(lastExecutedAt < limitTs ){
 
-        String playerName = args[0];
         if(isDebug){
           sp.sendMessage(DEBUG_TAG + "ターゲット確認");
         }
@@ -500,14 +504,7 @@ class MainProcess {
 
         if(reputation < 0){
           if(isJailed == false){
-            String commandString = "";
-            commandString = String.format(conf.getString("jail_command"), playerName);
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
-            commandString = String.format(conf.getString("mute_command"), playerName);
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
-            commandString = String.format(conf.getString("send_command"), playerName);
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
-            sp.sendMessage("投獄しました");
+            jail_proc(con, conf, sp, tp);
           }else{
             sp.sendMessage("投獄済みです");
           }

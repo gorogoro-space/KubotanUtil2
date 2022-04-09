@@ -1,10 +1,10 @@
 main: space.gorogoro.kubotanutil2.KubotanUtil2
 name: KubotanUtil2
-version: 1.1
-api-version: 1.15
+version: 1.2
+api-version: 1.18
 description: kubotanプラグイン
 author: kubotan
-website: http://blog.gorogoro.space/
+website: https://gorogoro.space/
 
 commands:
   bad:
