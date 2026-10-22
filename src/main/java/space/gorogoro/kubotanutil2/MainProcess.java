@@ -24,19 +24,25 @@ class MainProcess {
   public static final int IS_BANED_TRUE = 1;
   public static final int IS_BANED_FALSE = 2;
 
+  // オフラインのプレイヤーは getName() が null のことがあるので、そのときはコマンドの引数の名前を使う
+  private static String targetName(OfflinePlayer tp, String argName){
+    String name = tp.getName();
+    return name != null ? name : argName;
+  }
+
   public static boolean ban(KubotanUtil2 plugin,Connection con , FileConfiguration conf, Player sp, String[] args) throws SQLException{
       if(args.length != 2){
         return false;
       }
-      Bukkit.dispatchCommand(Bukkit.getConsoleSender(), String.format(conf.getString("ban_command"), args[0], args[1]));
+      BukkitUtil.dispatchCommand(String.format(conf.getString("ban_command"), args[0], args[1]));
 
-      PreparedStatement prepStmt = con.prepareStatement("UPDATE users SET is_baned=? WHERE playername=?");
+      PreparedStatement prepStmt = con.prepareStatement("UPDATE users SET is_baned=? WHERE playername=? COLLATE NOCASE");
       prepStmt.setInt(1, IS_BANED_TRUE);
       prepStmt.setString(2, args[0]);
       prepStmt.addBatch();
       prepStmt.executeBatch();
       con.commit();
-      sp.sendMessage(args[0] + "さんをBANしました。");
+      BukkitUtil.sendMessage(sp, args[0] + "さんをBANしました。");
       return true;
   }
   
@@ -44,15 +50,15 @@ class MainProcess {
     if(args.length != 1){
       return false;
     }
-    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), String.format(conf.getString("unban_command"), args[0]));
+    BukkitUtil.dispatchCommand(String.format(conf.getString("unban_command"), args[0]));
 
-    PreparedStatement prepStmt = con.prepareStatement("UPDATE users SET is_baned=? WHERE playername=?");
+    PreparedStatement prepStmt = con.prepareStatement("UPDATE users SET is_baned=? WHERE playername=? COLLATE NOCASE");
     prepStmt.setInt(1, IS_BANED_FALSE);
     prepStmt.setString(2, args[0]);
     prepStmt.addBatch();
     prepStmt.executeBatch();
     con.commit();
-    sp.sendMessage(args[0] + "さんをUNBANしました。");
+    BukkitUtil.sendMessage(sp, args[0] + "さんをUNBANしました。");
     return true;
   }
 
@@ -66,22 +72,22 @@ class MainProcess {
     rs = prepStmt.executeQuery();
     if(rs.next()){
       reputation = rs.getDouble(1);
-      sp.sendMessage(" 現在の評価は " + String.format("%.3f", reputation) + " です");
+      BukkitUtil.sendMessage(sp, " 現在の評価は " + String.format("%.3f", reputation) + " です");
       if(reputation < 1.000){
-        sp.sendMessage(" reputationが1.000未満です！");
-        sp.sendMessage(" goodしてもらえるようなアクションをしてみましょう！");
+        BukkitUtil.sendMessage(sp, " reputationが1.000未満です！");
+        BukkitUtil.sendMessage(sp, " goodしてもらえるようなアクションをしてみましょう！");
       }
     }
 
     if(isCommand) {
-      sp.sendMessage("=== 評価履歴を表示します ===");
+      BukkitUtil.sendMessage(sp, "=== 評価履歴を表示します ===");
       prepStmt = con.prepareStatement("SELECT reason,created_at,last_executed_type FROM last_executed_history WHERE target_uuid=? and created_at >= datetime('2021-01-01 00:00:00')");
       prepStmt.setString(1,sp.getUniqueId().toString());
       rs = prepStmt.executeQuery();
       String label = "";
       String created_at = "";
       int rownum = 0;
-      SimpleDateFormat ymdhis = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+      SimpleDateFormat ymdhis = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
       SimpleDateFormat ymd = new SimpleDateFormat("yyyy/MM/dd");
       Date datetime;
       while(rs.next()){
@@ -97,20 +103,20 @@ class MainProcess {
             datetime = ymdhis.parse(rs.getString(2));
             created_at = ymd.format(datetime);
           } catch (Exception e) {
-            sp.sendMessage("評価の作成日取得でエラーが発生しました。");
+            BukkitUtil.sendMessage(sp, "評価の作成日取得でエラーが発生しました。");
           }
         }
-        sp.sendMessage(label + "reason:" + rs.getString(1) + " (" + created_at + ")");
+        BukkitUtil.sendMessage(sp, label + "reason:" + rs.getString(1) + " (" + created_at + ")");
       }
       if(rownum <= 0) {
-        sp.sendMessage("  評価履歴は0件です");
+        BukkitUtil.sendMessage(sp, "  評価履歴は0件です");
       }
-      sp.sendMessage("※2021/01/01より古いデータは見れません");
+      BukkitUtil.sendMessage(sp, "※2021/01/01より古いデータは見れません");
     }
     return true;
   }
 
-  public static boolean statusOp(Connection con, Player sp, String[] args) throws SQLException{
+  public static boolean statusOp(Connection con, Player sp, Player online, String[] args) throws SQLException{
     if(args.length != 1){
       return false;
     }
@@ -118,31 +124,31 @@ class MainProcess {
     PreparedStatement prepStmt;
     ResultSet rs;
     // ターゲットプレイヤーを取得する
-    OfflinePlayer tp = BukkitUtil.getPlayer(args[0]);
+    OfflinePlayer tp = BukkitUtil.getPlayer(con, online, args[0]);
     if(tp == null){
-      sp.sendMessage("["+args[0]+"] not found.");
-      sp.sendMessage("ターゲット未確認");
+      BukkitUtil.sendMessage(sp, "["+args[0]+"] not found.");
+      BukkitUtil.sendMessage(sp, "ターゲット未確認");
       return true;
     }
     prepStmt = con.prepareStatement("SELECT reputation, last_executed_at FROM users WHERE uuid=?");
     prepStmt.setString(1,tp.getUniqueId().toString());
     rs = prepStmt.executeQuery();
     if(rs.next()){
-      sp.sendMessage(
+      BukkitUtil.sendMessage(sp, 
         " reputation:" + String.format("%.3f", rs.getDouble(1)) +
         " last_executed_at:" + rs.getString(2)
       );
     }
 
-    sp.sendMessage("=== 評価履歴を表示します ===");
+    BukkitUtil.sendMessage(sp, "=== 評価履歴を表示します ===");
     prepStmt = con.prepareStatement("SELECT reason,sender_playername,created_at,last_executed_type FROM last_executed_history WHERE target_uuid=? and created_at >= datetime('2021-01-01 00:00:00')");
     prepStmt.setString(1,tp.getUniqueId().toString());
     rs = prepStmt.executeQuery();
     String label = "";
     String created_at = "";
     int rownum = 0;
-    SimpleDateFormat ymdhis = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
-    SimpleDateFormat ymd = new SimpleDateFormat("yyyy/MM/dd hh:mm:ss");
+    SimpleDateFormat ymdhis = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    SimpleDateFormat ymd = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
     Date datetime;
     while(rs.next()){
       rownum++;
@@ -157,15 +163,15 @@ class MainProcess {
           datetime = ymdhis.parse(rs.getString(3));
           created_at = ymd.format(datetime);
         } catch (Exception e) {
-          sp.sendMessage("評価の作成日取得でエラーが発生しました。");
+          BukkitUtil.sendMessage(sp, "評価の作成日取得でエラーが発生しました。");
         }
       }
-      sp.sendMessage(label + "reason:" + rs.getString(1) + " by " + rs.getString(2) + " (" + created_at + ")");
+      BukkitUtil.sendMessage(sp, label + "reason:" + rs.getString(1) + " by " + rs.getString(2) + " (" + created_at + ")");
     }
     if(rownum <= 0) {
-      sp.sendMessage("  評価履歴は0件です");
+      BukkitUtil.sendMessage(sp, "  評価履歴は0件です");
     }
-    sp.sendMessage("※2021/01/01より古いデータは見れません");
+    BukkitUtil.sendMessage(sp, "※2021/01/01より古いデータは見れません");
 
     return true;
   }
@@ -174,12 +180,12 @@ class MainProcess {
     if(args.length != 1){
       return false;
     }
-    sp.sendMessage(args[0] + "さんの投獄・BAN状況：");
+    BukkitUtil.sendMessage(sp, args[0] + "さんの投獄・BAN状況：");
     PreparedStatement prepStmt;
     ResultSet rs;
     Boolean isJailed = false;
     Boolean isBaned = false;
-    prepStmt = con.prepareStatement("SELECT is_jailed,is_baned FROM users WHERE playername=?");
+    prepStmt = con.prepareStatement("SELECT is_jailed,is_baned FROM users WHERE playername=? COLLATE NOCASE");
     prepStmt.setString(1, args[0]);
     rs = prepStmt.executeQuery();
     if(rs.next()){
@@ -191,19 +197,19 @@ class MainProcess {
       }
     }
     if(isJailed) {
-      sp.sendMessage(" ・投獄中です");
+      BukkitUtil.sendMessage(sp, " ・投獄中です");
     }else {
-      sp.sendMessage(" ・投獄中ではありません");
+      BukkitUtil.sendMessage(sp, " ・投獄中ではありません");
     }
     if(isBaned) {
-      sp.sendMessage(" ・BANされています");
+      BukkitUtil.sendMessage(sp, " ・BANされています");
     }else {
-      sp.sendMessage(" ・BANされていません");
+      BukkitUtil.sendMessage(sp, " ・BANされていません");
     }
     return true;
   }
 
-  public static boolean reasonOp(Connection con, Player sp, String[] args) throws SQLException{
+  public static boolean reasonOp(Connection con, Player sp, Player online, String[] args) throws SQLException{
     if(args.length != 1){
       return false;
     }
@@ -211,10 +217,10 @@ class MainProcess {
     PreparedStatement prepStmt;
     ResultSet rs;
     // ターゲットプレイヤーを取得する
-    OfflinePlayer tp = BukkitUtil.getPlayer(args[0]);
+    OfflinePlayer tp = BukkitUtil.getPlayer(con, online, args[0]);
     if(tp == null){
-      sp.sendMessage("["+args[0]+"] not found.");
-      sp.sendMessage("ターゲット未確認");
+      BukkitUtil.sendMessage(sp, "["+args[0]+"] not found.");
+      BukkitUtil.sendMessage(sp, "ターゲット未確認");
       return true;
     }
     prepStmt = con.prepareStatement("SELECT reason,sender_playername,created_at,last_executed_type FROM last_executed_history WHERE target_uuid=?");
@@ -227,33 +233,33 @@ class MainProcess {
       }else if(rs.getInt(4) == LAST_EXECUTED_TYPE_GOOD){
         label="good ";
       }
-      sp.sendMessage(label + "reason:" + rs.getString(1) + " by " + rs.getString(2) + " (" + rs.getString(3) + ")");
+      BukkitUtil.sendMessage(sp, label + "reason:" + rs.getString(1) + " by " + rs.getString(2) + " (" + rs.getString(3) + ")");
     }
     return true;
   }
 
-  public static boolean bad(FileConfiguration conf, Connection con, Player sp, String[] args){
-    return sub(LAST_EXECUTED_TYPE_BAD, conf, con, sp, args);
+  public static boolean bad(FileConfiguration conf, Connection con, Player sp, Player online, String[] args){
+    return sub(LAST_EXECUTED_TYPE_BAD, conf, con, sp, online, args);
   }
 
-  public static boolean good(FileConfiguration conf,Connection con, Player sp, String[] args) throws SQLException{
-    return sub(LAST_EXECUTED_TYPE_GOOD, conf, con, sp, args);
+  public static boolean good(FileConfiguration conf,Connection con, Player sp, Player online, String[] args) throws SQLException{
+    return sub(LAST_EXECUTED_TYPE_GOOD, conf, con, sp, online, args);
   }
 
-  public static boolean jail(KubotanUtil2 plugin, Connection con , FileConfiguration conf, Player sp, String[] args){
+  public static boolean jail(KubotanUtil2 plugin, Connection con , FileConfiguration conf, Player sp, Player online, String[] args){
     try{
       if(args.length != 1){
         return false;
       }
 
-      OfflinePlayer tp = BukkitUtil.getPlayer(args[0]);
+      OfflinePlayer tp = BukkitUtil.getPlayer(con, online, args[0]);
       if(tp == null){
-        sp.sendMessage("["+args[0]+"] not found.");
-        sp.sendMessage("指定されたプレイヤーが見つかりません");
+        BukkitUtil.sendMessage(sp, "["+args[0]+"] not found.");
+        BukkitUtil.sendMessage(sp, "指定されたプレイヤーが見つかりません");
         return true;
       }
 
-      jail_proc(con, conf, sp, tp);
+      jail_proc(con, conf, sp, tp, targetName(tp, args[0]));
 
     } catch (Exception e) {
       BukkitUtil.logStackMessage(e);
@@ -261,18 +267,18 @@ class MainProcess {
     return true;
   }
 
-  public static boolean jail_proc(Connection con , FileConfiguration conf, Player sp, OfflinePlayer tp) throws SQLException {
+  public static boolean jail_proc(Connection con , FileConfiguration conf, Player sp, OfflinePlayer tp, String targetName) throws SQLException {
 
-    if(tp.getName() == sp.getName()){
-      sp.sendMessage("自分の投獄はできません");
+    if(tp.getUniqueId().equals(sp.getUniqueId())){
+      BukkitUtil.sendMessage(sp, "自分の投獄はできません");
       return true;
     }
 
     String commandString = "";
-    commandString = String.format(conf.getString("jail_command"), tp.getName());
-    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
-    commandString = String.format(conf.getString("mute_command"), tp.getName());
-    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
+    commandString = String.format(conf.getString("jail_command"), targetName);
+    BukkitUtil.dispatchCommand(commandString);
+    commandString = String.format(conf.getString("mute_command"), targetName);
+    BukkitUtil.dispatchCommand(commandString);
 
     PreparedStatement prepStmt = con.prepareStatement("UPDATE users SET is_jailed=? WHERE uuid=?");
     prepStmt.setInt(1, 1);
@@ -280,35 +286,35 @@ class MainProcess {
     prepStmt.addBatch();
     prepStmt.executeBatch();
     con.commit();
-    sp.sendMessage("投獄しました。");
+    BukkitUtil.sendMessage(sp, "投獄しました。");
     return true;
   }
 
-  public static boolean unjail(KubotanUtil2 plugin, Connection con, FileConfiguration conf, Player sp, String[] args){
+  public static boolean unjail(KubotanUtil2 plugin, Connection con, FileConfiguration conf, Player sp, Player online, String[] args){
     try{
       if(args.length != 1){
         return false;
       }
 
-      OfflinePlayer tp = BukkitUtil.getPlayer(args[0]);
+      OfflinePlayer tp = BukkitUtil.getPlayer(con, online, args[0]);
       if(tp == null){
-        sp.sendMessage("["+args[0]+"] not found.");
-        sp.sendMessage("指定されたプレイヤーが見つかりません");
+        BukkitUtil.sendMessage(sp, "["+args[0]+"] not found.");
+        BukkitUtil.sendMessage(sp, "指定されたプレイヤーが見つかりません");
         return true;
       }
 
-      if(tp.getName() == sp.getName()){
-        sp.sendMessage("自分の釈放はできません");
+      if(tp.getUniqueId().equals(sp.getUniqueId())){
+        BukkitUtil.sendMessage(sp, "自分の釈放はできません");
         return true;
       }
 
       String commandString = "";
-      commandString = String.format(conf.getString("unjail_command"), tp.getName());
-      Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
-      commandString = String.format(conf.getString("unmute_command"), tp.getName());
-      Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
-      commandString = String.format(conf.getString("tp_command"), tp.getName(), sp.getName());
-      Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandString);
+      commandString = String.format(conf.getString("unjail_command"), targetName(tp, args[0]));
+      BukkitUtil.dispatchCommand(commandString);
+      commandString = String.format(conf.getString("unmute_command"), targetName(tp, args[0]));
+      BukkitUtil.dispatchCommand(commandString);
+      commandString = String.format(conf.getString("tp_command"), targetName(tp, args[0]), sp.getName());
+      BukkitUtil.dispatchCommand(commandString);
 
       PreparedStatement prepStmt = con.prepareStatement("UPDATE users SET is_jailed=? WHERE uuid=?");
       prepStmt.setInt(1, 0);
@@ -317,7 +323,7 @@ class MainProcess {
       prepStmt.executeBatch();
       con.commit();
 
-      sp.sendMessage("釈放処理(unjail及びmute)を実行しました。");
+      BukkitUtil.sendMessage(sp, "釈放処理(unjail及びmute)を実行しました。");
 
     } catch (Exception e) {
       BukkitUtil.logStackMessage(e);
@@ -325,7 +331,7 @@ class MainProcess {
     return true;
   }
 
-  public static boolean sub(int type, FileConfiguration conf, Connection con, Player sp, String[] args){
+  public static boolean sub(int type, FileConfiguration conf, Connection con, Player sp, Player online, String[] args){
     try{
       PreparedStatement prepStmt;
       ResultSet rs;
@@ -335,8 +341,8 @@ class MainProcess {
       }
 
       if(args[1].length() < 1){
-        sp.sendMessage("理由を入力してください。（スペースは文中に含めないでください。）");
-        sp.sendMessage("例：/bad プレイヤー名 理由");
+        BukkitUtil.sendMessage(sp, "理由を入力してください。（スペースは文中に含めないでください。）");
+        BukkitUtil.sendMessage(sp, "例：/bad プレイヤー名 理由");
         return false;
       }
       String reason = args[1];
@@ -352,20 +358,20 @@ class MainProcess {
       if(rs.next()){
         lastExecutedAt = DateTimeUtil.getTimestampByStrings(rs.getString(1));
         if(isDebug){
-          sp.sendMessage(DEBUG_TAG + "送信者情報確認完了");
+          BukkitUtil.sendMessage(sp, DEBUG_TAG + "送信者情報確認完了");
         }
       }
 
       // ターゲットプレイヤーを取得する
-      OfflinePlayer tp = BukkitUtil.getPlayer(args[0]);
+      OfflinePlayer tp = BukkitUtil.getPlayer(con, online, args[0]);
       if(tp == null){
-        sp.sendMessage("["+args[0]+"] not found.");
-        sp.sendMessage("指定されたプレイヤーが見つかりません");
+        BukkitUtil.sendMessage(sp, "["+args[0]+"] not found.");
+        BukkitUtil.sendMessage(sp, "指定されたプレイヤーが見つかりません");
         return true;
       }
 
-      if(tp.getName() == sp.getName()){
-        sp.sendMessage("自分への評価はできません");
+      if(tp.getUniqueId().equals(sp.getUniqueId())){
+        BukkitUtil.sendMessage(sp, "自分への評価はできません");
         return true;
       }
 
@@ -377,29 +383,29 @@ class MainProcess {
       if(rs.next()){
         reputation = rs.getDouble(1);
         if(isDebug){
-          sp.sendMessage(DEBUG_TAG + "ターゲット情報確認完了");
+          BukkitUtil.sendMessage(sp, DEBUG_TAG + "ターゲット情報確認完了");
         }
       }
       boolean isJailed = false;
       if(reputation < 0){
         isJailed = true;
         if(isDebug){
-          sp.sendMessage(DEBUG_TAG + "評価値はマイナスです");
+          BukkitUtil.sendMessage(sp, DEBUG_TAG + "評価値はマイナスです");
         }
       }else if(reputation >= 1.000 && type == LAST_EXECUTED_TYPE_GOOD && !sp.isOp()){
-        sp.sendMessage("評価値上限を超えて評価することはできません");
+        BukkitUtil.sendMessage(sp, "評価値上限を超えて評価することはできません");
         return true;
       }
 
       // 送信者のlast_executed_atを参照しexecIntervalHour時間以内であれば処理をスキップする
       long limitTs = DateTimeUtil.addHour((execIntervalHour * -1)).getTimeInMillis();
       if(isDebug){
-        sp.sendMessage(DEBUG_TAG + DateTimeUtil.getStringByTimestamp(lastExecutedAt) + " < " + DateTimeUtil.getStringByTimestamp(limitTs));
+        BukkitUtil.sendMessage(sp, DEBUG_TAG + DateTimeUtil.getStringByTimestamp(lastExecutedAt) + " < " + DateTimeUtil.getStringByTimestamp(limitTs));
       }
       if(lastExecutedAt < limitTs ){
 
         if(isDebug){
-          sp.sendMessage(DEBUG_TAG + "ターゲット確認");
+          BukkitUtil.sendMessage(sp, DEBUG_TAG + "ターゲット確認");
         }
         // ヒストリーの登録済みチェック
         Boolean existsHistory = false;
@@ -421,7 +427,7 @@ class MainProcess {
           typeMessage = "加算";
         }
         if(existsHistory){
-          sp.sendMessage("同一ユーザーへの" + typeMessage + "の再評価は許可されていません");
+          BukkitUtil.sendMessage(sp, "同一ユーザーへの" + typeMessage + "の再評価は許可されていません");
           return true;
         }
 
@@ -433,7 +439,7 @@ class MainProcess {
         prepStmt.executeBatch();
 
         if(isDebug){
-          sp.sendMessage(DEBUG_TAG + "メイン処理実行開始");
+          BukkitUtil.sendMessage(sp, DEBUG_TAG + "メイン処理実行開始");
         }
         String updateSql = "";
         double updateValue = 0;
@@ -459,7 +465,7 @@ class MainProcess {
         prepStmt.setString(4, tp.getUniqueId().toString());
         prepStmt.addBatch();
         prepStmt.executeBatch();
-        sp.sendMessage("指定されたプレイヤーの評価値を" + typeMessage + "しました");
+        BukkitUtil.sendMessage(sp, "指定されたプレイヤーの評価値を" + typeMessage + "しました");
 
         // ヒストリーが無ければ登録
         if(!existsHistory){
@@ -483,7 +489,7 @@ class MainProcess {
           prepStmt.setString(1, sp.getUniqueId().toString());
           prepStmt.setString(2, sp.getName());
           prepStmt.setString(3, tp.getUniqueId().toString());
-          prepStmt.setString(4, tp.getName());
+          prepStmt.setString(4, targetName(tp, args[0]));
           prepStmt.setInt(5, type);
           prepStmt.setString(6, reason);
           prepStmt.addBatch();
@@ -498,21 +504,21 @@ class MainProcess {
         if(rs.next()){
           reputation = rs.getDouble(1);
           if(isDebug){
-            sp.sendMessage(DEBUG_TAG + "ターゲット情報確認完了");
+            BukkitUtil.sendMessage(sp, DEBUG_TAG + "ターゲット情報確認完了");
           }
         }
 
         if(reputation < 0){
           if(isJailed == false){
-            jail_proc(con, conf, sp, tp);
+            jail_proc(con, conf, sp, tp, targetName(tp, args[0]));
           }else{
-            sp.sendMessage("投獄済みです");
+            BukkitUtil.sendMessage(sp, "投獄済みです");
           }
         }else{
-          sp.sendMessage("評価が完了しました");
+          BukkitUtil.sendMessage(sp, "評価が完了しました");
         }
       }else{
-        sp.sendMessage("初ログインもしくは最終実行から" + execIntervalHour + "時間以内は実行できません");
+        BukkitUtil.sendMessage(sp, "初ログインもしくは最終実行から" + execIntervalHour + "時間以内は実行できません");
       }
     } catch (SQLException e) {
       BukkitUtil.logStackMessage(e);
@@ -540,11 +546,11 @@ class MainProcess {
     prepStmt.addBatch();
     prepStmt.executeBatch();
     con.commit();
-    sp.sendMessage("更新しました");
+    BukkitUtil.sendMessage(sp, "更新しました");
     return true;
   }
 
-  public static boolean upValue(Connection con, Player sp, String[] args) throws SQLException{
+  public static boolean upValue(Connection con, Player sp, Player online, String[] args) throws SQLException{
     PreparedStatement prepStmt;
 
     if(args.length != 2){
@@ -552,10 +558,10 @@ class MainProcess {
     }
 
     // ターゲットプレイヤーを取得する
-    OfflinePlayer tp = BukkitUtil.getPlayer(args[0]);
+    OfflinePlayer tp = BukkitUtil.getPlayer(con, online, args[0]);
     if(tp == null){
-      sp.sendMessage("["+args[0]+"] not found.");
-      sp.sendMessage("ターゲット未確認");
+      BukkitUtil.sendMessage(sp, "["+args[0]+"] not found.");
+      BukkitUtil.sendMessage(sp, "ターゲット未確認");
 
       return true;
     }
@@ -566,7 +572,7 @@ class MainProcess {
     prepStmt.addBatch();
     prepStmt.executeBatch();
     con.commit();
-    sp.sendMessage("更新しました");
+    BukkitUtil.sendMessage(sp, "更新しました");
     return true;
   }
 }

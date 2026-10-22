@@ -8,7 +8,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -19,11 +23,14 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class KubotanUtil2 extends JavaPlugin implements Listener{
+  private static final long DB_SHUTDOWN_TIMEOUT_SECONDS = 5;
   private Connection con;
+  private ExecutorService dbExecutor;
 
   @Override
   public void onEnable(){
     try{
+      BukkitUtil.plugin = this;
       BukkitUtil.logInfo("The Plugin Has Been Enabled!");
       getServer().getPluginManager().registerEvents(this, this);
 
@@ -59,6 +66,7 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
       );
       stmt.executeUpdate("CREATE UNIQUE INDEX IF NOT EXISTS uuid_uindex ON users (uuid);");
       stmt.executeUpdate("CREATE INDEX IF NOT EXISTS playername_index ON users (playername);");
+      stmt.executeUpdate("CREATE INDEX IF NOT EXISTS playername_nocase_index ON users (playername COLLATE NOCASE);");
 
       stmt.executeUpdate("CREATE TABLE IF NOT EXISTS last_executed_history ("
         + " id INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -79,25 +87,52 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
       con.commit();
       stmt.close();
 
+      dbExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "KubotanUtil2-DB"));
+
     } catch (Exception e){
       BukkitUtil.logStackMessage(e);
     }
   }
 
+  // DB の読み書きは、メインスレッドを止めないようにこのスレッドで順番に行う
+  private void runDb(DbTask task){
+    if(dbExecutor == null || dbExecutor.isShutdown()){
+      return;
+    }
+    dbExecutor.execute(() -> {
+      try{
+        task.run();
+      }catch(Exception e){
+        BukkitUtil.logStackMessage(e);
+      }
+    });
+  }
+
+  private interface DbTask {
+    void run() throws Exception;
+  }
+
   @EventHandler
   public void onPlayerJoinEvent(PlayerJoinEvent event){
+    Player player = event.getPlayer();
+    String uuid = player.getUniqueId().toString();
+    String name = player.getName();
+    runDb(() -> join(player, uuid, name));
+  }
+
+  private void join(Player player, String uuid, String name){
     try {
       // 既存ユーザーか確認
-      String dbPlayerName; 
+      String dbPlayerName;
       String queryUpdateUser = "";
       Boolean existsUser = false;
       PreparedStatement prepStmt = con.prepareStatement("SELECT playername FROM users WHERE uuid=?");
-      prepStmt.setString(1, event.getPlayer().getUniqueId().toString());
+      prepStmt.setString(1, uuid);
       ResultSet rs = prepStmt.executeQuery();
       if (rs.next()){
         existsUser = true;
         dbPlayerName = rs.getString(1);
-        if(!dbPlayerName.equals(event.getPlayer().getName())) {
+        if(!dbPlayerName.equals(name)) {
           queryUpdateUser = "UPDATE users SET playername=? WHERE uuid=?";
         }
       }
@@ -115,8 +150,8 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
           + ",?"
           + ");"
         );
-        prepStmt.setString(1, event.getPlayer().getUniqueId().toString());
-        prepStmt.setString(2, event.getPlayer().getName());
+        prepStmt.setString(1, uuid);
+        prepStmt.setString(2, name);
         prepStmt.addBatch();
         prepStmt.executeBatch();
         con.commit();
@@ -125,8 +160,8 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
 
       if(!queryUpdateUser.isEmpty()) {
         prepStmt = con.prepareStatement(queryUpdateUser);
-        prepStmt.setString(1, event.getPlayer().getName());
-        prepStmt.setString(2, event.getPlayer().getUniqueId().toString());
+        prepStmt.setString(1, name);
+        prepStmt.setString(2, uuid);
         prepStmt.addBatch();
         prepStmt.executeBatch();
         con.commit();
@@ -134,8 +169,8 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
       }
 
       // 現在の情報を表示
-      event.getPlayer().sendMessage("ようこそ " + event.getPlayer().getName() + " さん♪");
-      MainProcess.status(con, event.getPlayer(), false);
+      BukkitUtil.sendMessage(player, "ようこそ " + name + " さん♪");
+      MainProcess.status(con, player, false);
     } catch (SQLException e) {
       BukkitUtil.logStackMessage(e);
     }
@@ -151,36 +186,73 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
       if((sender instanceof Player)) {
         Player sp = (Player)sender;
         if(sp.hasPermission("space.gorogoro.kubotanutil2.default.*")){
+          // 引数の数の確認とオンラインのプレイヤーの検索はメインスレッドで行い、DB の処理は runDb に渡す
           FileConfiguration conf = getConfig();
-          if( command.getName().equals("bad") ) {
-            return MainProcess.bad(conf, con, sp, args);
-          }else if( command.getName().equals("good") ) {
-            return MainProcess.good(conf, con, sp, args);
-          }else if( command.getName().equals("status") ) {
-            boolean ret;
-            if(sp.isOp()){
-              ret = MainProcess.statusOp(con, sp, args);
-              if(sp.getName().equals("kubotan")){
-                MainProcess.reasonOp(con, sp, args);
-              }
-            }else{
-              ret = MainProcess.status(con, sp, true);
+          Player online = args.length > 0 ? Bukkit.getPlayerExact(args[0]) : null;
+          if( command.getName().equals("bad") || command.getName().equals("good") ) {
+            if(args.length != 2){
+              return false;
             }
-            return ret;
+            if(args[1].length() < 1){
+              sp.sendMessage("理由を入力してください。（スペースは文中に含めないでください。）");
+              sp.sendMessage("例：/bad プレイヤー名 理由");
+              return false;
+            }
+            if( command.getName().equals("bad") ) {
+              runDb(() -> MainProcess.bad(conf, con, sp, online, args));
+            }else{
+              runDb(() -> MainProcess.good(conf, con, sp, online, args));
+            }
+          }else if( command.getName().equals("status") ) {
+            if(sp.isOp()){
+              if(args.length != 1){
+                return false;
+              }
+              boolean showAll = sp.getName().equals("kubotan");
+              runDb(() -> {
+                MainProcess.statusOp(con, sp, online, args);
+                if(showAll){
+                  MainProcess.reasonOp(con, sp, online, args);
+                }
+              });
+            }else{
+              runDb(() -> MainProcess.status(con, sp, true));
+            }
           }else if( command.getName().equals("isjailed") ) {
-            return MainProcess.isJailed(con, sp, args);
+            if(args.length != 1){
+              return false;
+            }
+            runDb(() -> MainProcess.isJailed(con, sp, args));
           }else if( sp.hasPermission("space.gorogoro.kubotanutil2.kjail") && command.getName().equals("kjail") ) {
-            return MainProcess.jail(this, con, conf, sp, args);
+            if(args.length != 1){
+              return false;
+            }
+            runDb(() -> MainProcess.jail(this, con, conf, sp, online, args));
           }else if( sp.hasPermission("space.gorogoro.kubotanutil2.kunjail") && command.getName().equals("kunjail") ) {
-            return MainProcess.unjail(this, con, conf, sp, args);
+            if(args.length != 1){
+              return false;
+            }
+            runDb(() -> MainProcess.unjail(this, con, conf, sp, online, args));
           }else if( sp.hasPermission("space.gorogoro.kubotanutil2.kban") && command.getName().equals("kban") ) {
-            return MainProcess.ban(this, con, conf, sp, args);
+            if(args.length != 2){
+              return false;
+            }
+            runDb(() -> MainProcess.ban(this, con, conf, sp, args));
           }else if( sp.hasPermission("space.gorogoro.kubotanutil2.kunban") && command.getName().equals("kunban") ) {
-            return MainProcess.unban(this, con, conf, sp, args);
+            if(args.length != 1){
+              return false;
+            }
+            runDb(() -> MainProcess.unban(this, con, conf, sp, args));
           }else if( sp.isOp() && command.getName().equals("update") ) {
-            return MainProcess.upDate(con, sp, args);
+            if(args.length != 2){
+              return false;
+            }
+            runDb(() -> MainProcess.upDate(con, sp, args));
           }else if( sp.isOp() && command.getName().equals("upvalue") ) {
-            return MainProcess.upValue(con, sp, args);
+            if(args.length != 2){
+              return false;
+            }
+            runDb(() -> MainProcess.upValue(con, sp, online, args));
           }
         }
       }
@@ -193,6 +265,14 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
   @Override
   public void onDisable(){
     try{
+      // 残っている DB の処理を最大 5 秒待つ
+      if (dbExecutor != null) {
+        dbExecutor.shutdown();
+        if (!dbExecutor.awaitTermination(DB_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+          BukkitUtil.logWarn("Timed out waiting for the database tasks. Closing the database.");
+          dbExecutor.shutdownNow();
+        }
+      }
       if (con != null) {
         con.close();      // DB切断
       }
