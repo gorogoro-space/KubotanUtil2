@@ -4,7 +4,7 @@ version: '${version}'
 api-version: '1.21.11'
 description: kubotanプラグイン
 author: kubotan
-website: https://www.gorogoro.space/
+website: https://github.com/gorogoro-space/KubotanUtil2
 
 commands:
   bad:
