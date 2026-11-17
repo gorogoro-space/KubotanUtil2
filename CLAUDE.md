@@ -55,7 +55,6 @@
 (現在の実装の動作。仕様を変えたらここを更新する)
 
 - **起動時(`onEnable`)**: `config.yml` が無ければ jar 内のものを保存する。`status.db` に接続し(自動コミット無効)、`users`(UUID・名前・投獄・BAN の状態)のテーブルを無ければ作る。そのあと DB 専用のスレッドを作る
-- **評価データの削除(2.0 だけ。2.1 でこの処理ごと削除する)**: 起動時に DB 専用のスレッドで、`users` の `reputation`・`reason`・`last_executed_at` 列と `last_executed_history` テーブルがあれば削除し、`VACUUM` で詰める。削除したらログ(`Removed the reputation data from status.db: ...`)を出す。削除するものが無ければ何もしない(`KubotanUtil2.removeReputationData`)
 - **停止時(`onDisable`)**: DB 専用のスレッドに残っている処理を最大 5 秒待ち(終われば待たない)、接続を閉じる。5 秒で終わらなければ警告を出して打ち切る。停止中に実行しようとしたコマンドは実行せず、警告ログ(`Skipped the command because the plugin is disabled: ...`)を出す
 - **プレイヤーの検索(`BukkitUtil.getPlayer`)**: オンラインのプレイヤー(`getPlayerExact`)→ `users` テーブル(名前の大文字・小文字を区別しない。同じ名前が複数あれば新しく登録された方)の順で探し、`getOfflinePlayer(UUID)` を返す。どちらにも無ければ「見つかりません」。一度もログインしていないプレイヤーは見つからない。名前の検索には、大文字・小文字を区別しない索引(`playername_nocase_index`、1.3 で追加)を使う
 - 自分自身が対象かどうかは UUID で比べる。投獄・釈放のコマンドに入れる名前は `getName()` で、null のときはコマンドに打たれた名前を使う

@@ -8,8 +8,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -71,7 +69,6 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
       stmt.close();
 
       dbExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "KubotanUtil2-DB"));
-      runDb(this::removeReputationData);
 
     } catch (Exception e){
       BukkitUtil.logStackMessage(e);
@@ -94,54 +91,6 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
 
   private interface DbTask {
     void run() throws Exception;
-  }
-
-  // 2.0 だけの処理: 廃止した評価制度のデータを status.db から削除する(2.1 でこの処理ごと削除する)
-  // 削除するものが無ければ何もしない
-  private void removeReputationData() throws SQLException {
-    List<String> columns = new ArrayList<>();
-    try (Statement stmt = con.createStatement();
-         ResultSet rs = stmt.executeQuery("PRAGMA table_info(users)")) {
-      while (rs.next()) {
-        columns.add(rs.getString("name"));
-      }
-    }
-    boolean hasHistory;
-    try (Statement stmt = con.createStatement();
-         ResultSet rs = stmt.executeQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='last_executed_history'")) {
-      hasHistory = rs.next();
-    }
-
-    List<String> removed = new ArrayList<>();
-    try (Statement stmt = con.createStatement()) {
-      for (String column : new String[]{"reputation", "reason", "last_executed_at"}) {
-        if (columns.contains(column)) {
-          stmt.executeUpdate("ALTER TABLE users DROP COLUMN " + column);
-          removed.add("users." + column);
-        }
-      }
-      if (hasHistory) {
-        // 索引もテーブルと一緒に削除される
-        stmt.executeUpdate("DROP TABLE last_executed_history");
-        removed.add("last_executed_history");
-      }
-      con.commit();
-    } catch (SQLException e) {
-      con.rollback();
-      throw e;
-    }
-    if (removed.isEmpty()) {
-      return;
-    }
-
-    // 削除したデータがファイルに残らないように詰める(VACUUM はトランザクションの外で行う)
-    con.setAutoCommit(true);
-    try (Statement stmt = con.createStatement()) {
-      stmt.executeUpdate("VACUUM");
-    } finally {
-      con.setAutoCommit(false);
-    }
-    BukkitUtil.logInfo("Removed the reputation data from status.db: " + String.join(", ", removed));
   }
 
   @EventHandler
