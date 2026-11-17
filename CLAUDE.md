@@ -1,6 +1,6 @@
 # KubotanUtil2
 
-プレイヤー同士の評価(good / bad)と、評価が下がったプレイヤーの投獄・BAN を行う Paper 用プラグイン(Paper 1.21.11 以降・Java 21 必須)。
+別のプラグインのコマンドでプレイヤーを投獄・BAN し、その状態を記録する Paper 用プラグイン(Paper 1.21.11 以降・Java 21 必須)。プレイヤー同士の評価(good / bad)は 2.0 で廃止した。
 リポジトリ: https://github.com/gorogoro-space/KubotanUtil2 (LGPL-3.0)
 
 ## 作業の進め方(必ず守ること)
@@ -54,29 +54,20 @@
 
 (現在の実装の動作。仕様を変えたらここを更新する)
 
-- **起動時(`onEnable`)**: `config.yml` が無ければ jar 内のものを保存する。`status.db` に接続し(自動コミット無効)、`users`(評価値・投獄・BAN の状態・最後に評価した日時)と `last_executed_history`(誰が誰を good / bad したか・理由)のテーブルを無ければ作る。そのあと DB 専用のスレッドを作る
+- **起動時(`onEnable`)**: `config.yml` が無ければ jar 内のものを保存する。`status.db` に接続し(自動コミット無効)、`users`(UUID・名前・投獄・BAN の状態)のテーブルを無ければ作る。そのあと DB 専用のスレッドを作る
 - **停止時(`onDisable`)**: DB 専用のスレッドに残っている処理を最大 5 秒待ち(終われば待たない)、接続を閉じる。5 秒で終わらなければ警告を出して打ち切る。停止中に実行しようとしたコマンドは実行せず、警告ログ(`Skipped the command because the plugin is disabled: ...`)を出す
 - **プレイヤーの検索(`BukkitUtil.getPlayer`)**: オンラインのプレイヤー(`getPlayerExact`)→ `users` テーブル(名前の大文字・小文字を区別しない。同じ名前が複数あれば新しく登録された方)の順で探し、`getOfflinePlayer(UUID)` を返す。どちらにも無ければ「見つかりません」。一度もログインしていないプレイヤーは見つからない。名前の検索には、大文字・小文字を区別しない索引(`playername_nocase_index`、1.3 で追加)を使う
-- 自分自身が対象かどうかは UUID で比べる。投獄・釈放のコマンドや履歴に入れる名前は `getName()` で、null のときはコマンドに打たれた名前を使う
-- **ログイン時**: `users` に無ければ登録し、名前が変わっていれば更新する。「ようこそ」と現在の評価値を表示し、1.000 未満なら注意を出す
-- **評価値**: 初期値 1.000。`/bad` で `bad_value`(既定 0.500)減り、`/good` で `good_value`(既定 0.500)増える
-  - 評価した人は、最後に評価してから `exex_interval_hour` 時間(既定 1)は評価できない(初ログイン直後も同じ)
-  - 同じ相手に同じ種類(good / bad)の評価は 1 回だけ
-  - 評価値が 1.000 以上の相手には、OP 以外は good できない
-  - 評価値が 0 未満になると、自動で投獄する(下の `/kjail` と同じ処理)
+- 自分自身が対象かどうかは UUID で比べる。投獄・釈放のコマンドに入れる名前は `getName()` で、null のときはコマンドに打たれた名前を使う
+- **ログイン時**: `users` に無ければ登録し、名前が変わっていれば更新する。メッセージは出さない(2.0 で「ようこそ」と評価値の表示を廃止)
 - **コマンド**(プレイヤーからだけ。コンソールからは何もしない)
   - `space.gorogoro.kubotanutil2.default.*` の権限がないと、どのコマンドも何もしない
-  - `/bad <名前> <理由>` / `/good <名前> <理由>` — 評価する。理由は空白なしの 1 語
-  - `/status` — 自分の評価値と、2021/01/01 以降の評価履歴を表示する。OP は `/status <名前>` で他人の評価値と履歴(評価した人つき)を表示する。名前が `kubotan` の OP には、2021/01/01 より前を含む全履歴も表示する
   - `/isjailed <名前>` — 投獄中か・BAN されているかを表示する(`users` の記録を名前で探す。大文字・小文字を区別しない)
   - `/kjail <名前>`(`space.gorogoro.kubotanutil2.kjail`) — config の `jail_command` と `mute_command` をコンソールから実行し、投獄中として記録する
   - `/kunjail <名前>`(`space.gorogoro.kubotanutil2.kunjail`) — `unjail_command`・`unmute_command`・`tp_command`(対象を実行した人の所へ)をコンソールから実行し、投獄中の記録を外す
   - `/kban <名前> <理由>`(`space.gorogoro.kubotanutil2.kban`) / `/kunban <名前>`(`space.gorogoro.kubotanutil2.kunban`) — `ban_command` / `unban_command` をコンソールから実行し、BAN の状態を記録する(`users` を名前で探す。大文字・小文字を区別しない)
-  - `/update <yyyy-MM-dd> <HH:mm:ss>`(OP) — 自分の最後に評価した日時を書き換える
-  - `/upvalue <名前> <値>`(OP) — 評価値を書き換える
+  - `/bad`・`/good`・`/status`・`/update`・`/upvalue` は 2.0 で廃止した(評価制度の廃止)
 - 投獄・BAN などの実際の処理は、config のコマンド(`%s` に名前などが入る)を別のプラグインに実行させる。このプラグイン自身は投獄・BAN をしない
 - 権限は `plugin.yml` に登録していない
-- `is_debug: true` で、評価のときにデバッグ用のメッセージを出す
 - 例外は `BukkitUtil.logStackMessage` でスタックトレースを警告ログに出す
 
 ## 過去にハマった点(他プロジェクトでの経験)
@@ -87,9 +78,8 @@
 ## ファイル構成(src/main/java/space/gorogoro/kubotanutil2/)
 
 - `KubotanUtil2.java` — メインクラス。起動・停止、DB の作成と DB 専用のスレッド、ログイン時の処理、コマンドの振り分け(引数の数の確認)
-- `MainProcess.java` — 各コマンドの処理(評価・投獄・BAN・表示)
+- `MainProcess.java` — 各コマンドの処理(投獄・BAN・表示)
 - `BukkitUtil.java` — ログ出力、メインスレッドでのメッセージ送信・コマンド実行、プレイヤーの検索
-- `DateTimeUtil.java` — 日時の計算と変換
 - `src/main/resources/plugin.yml` — プラグイン定義
-- `src/main/resources/config.yml` — 評価値の増減・評価の間隔・投獄や BAN で実行するコマンドの設定
+- `src/main/resources/config.yml` — 投獄や BAN で実行するコマンドの設定
 - `build.gradle.kts` / `settings.gradle.kts` / `gradle.properties` — Gradle の設定(バージョンは `gradle.properties`)

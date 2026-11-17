@@ -55,11 +55,8 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
         + " id INTEGER PRIMARY KEY AUTOINCREMENT"
         + ",uuid STRING NOT NULL"
         + ",playername STRING NOT NULL"
-        + ",reputation REAL NOT NULL DEFAULT 1.000"
-        + ",reason STRING NOT NULL DEFAULT 'Empty for old data.'"
         + ",is_jailed INTEGER NOT NULL DEFAULT 0"
         + ",is_baned INTEGER NOT NULL DEFAULT 0"
-        + ",last_executed_at DATETIME NOT NULL DEFAULT (datetime('now','localtime')) CHECK(last_executed_at LIKE '____-__-__ __:__:__')"
         + ",created_at DATETIME NOT NULL DEFAULT (datetime('now','localtime')) CHECK(created_at LIKE '____-__-__ __:__:__')"
         + ",updated_at DATETIME NOT NULL DEFAULT (datetime('now','localtime')) CHECK(updated_at LIKE '____-__-__ __:__:__')"
         + ");"
@@ -68,22 +65,6 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
       stmt.executeUpdate("CREATE INDEX IF NOT EXISTS playername_index ON users (playername);");
       stmt.executeUpdate("CREATE INDEX IF NOT EXISTS playername_nocase_index ON users (playername COLLATE NOCASE);");
 
-      stmt.executeUpdate("CREATE TABLE IF NOT EXISTS last_executed_history ("
-        + " id INTEGER PRIMARY KEY AUTOINCREMENT"
-        + ",sender_uuid STRING NOT NULL"
-        + ",sender_playername STRING NOT NULL"
-        + ",target_uuid STRING NOT NULL"
-        + ",target_playername STRING NOT NULL"
-        + ",last_executed_type INTEGER NOT NULL"
-        + ",reason STRING NOT NULL DEFAULT 'Empty for old data'"
-        + ",created_at DATETIME NOT NULL DEFAULT (datetime('now','localtime')) CHECK(created_at LIKE '____-__-__ __:__:__')"
-        + ",updated_at DATETIME NOT NULL DEFAULT (datetime('now','localtime')) CHECK(updated_at LIKE '____-__-__ __:__:__')"
-        + ",unique(sender_uuid, target_uuid, last_executed_type)"
-        + ");"
-      );
-      stmt.executeUpdate("CREATE INDEX IF NOT EXISTS last_uuid_type_index ON last_executed_history (sender_uuid, target_uuid, last_executed_type);");
-      stmt.executeUpdate("CREATE INDEX IF NOT EXISTS sender_playername_index ON last_executed_history (sender_playername);");
-      stmt.executeUpdate("CREATE INDEX IF NOT EXISTS target_playername_index ON last_executed_history (target_playername);");
       con.commit();
       stmt.close();
 
@@ -117,10 +98,10 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
     Player player = event.getPlayer();
     String uuid = player.getUniqueId().toString();
     String name = player.getName();
-    runDb(() -> join(player, uuid, name));
+    runDb(() -> join(uuid, name));
   }
 
-  private void join(Player player, String uuid, String name){
+  private void join(String uuid, String name){
     try {
       // 既存ユーザーか確認
       String dbPlayerName;
@@ -167,10 +148,6 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
         con.commit();
         prepStmt.close();
       }
-
-      // 現在の情報を表示
-      BukkitUtil.sendMessage(player, "ようこそ " + name + " さん♪");
-      MainProcess.status(con, player, false);
     } catch (SQLException e) {
       BukkitUtil.logStackMessage(e);
     }
@@ -189,36 +166,7 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
           // 引数の数の確認とオンラインのプレイヤーの検索はメインスレッドで行い、DB の処理は runDb に渡す
           FileConfiguration conf = getConfig();
           Player online = args.length > 0 ? Bukkit.getPlayerExact(args[0]) : null;
-          if( command.getName().equals("bad") || command.getName().equals("good") ) {
-            if(args.length != 2){
-              return false;
-            }
-            if(args[1].length() < 1){
-              sp.sendMessage("理由を入力してください。（スペースは文中に含めないでください。）");
-              sp.sendMessage("例：/bad プレイヤー名 理由");
-              return false;
-            }
-            if( command.getName().equals("bad") ) {
-              runDb(() -> MainProcess.bad(conf, con, sp, online, args));
-            }else{
-              runDb(() -> MainProcess.good(conf, con, sp, online, args));
-            }
-          }else if( command.getName().equals("status") ) {
-            if(sp.isOp()){
-              if(args.length != 1){
-                return false;
-              }
-              boolean showAll = sp.getName().equals("kubotan");
-              runDb(() -> {
-                MainProcess.statusOp(con, sp, online, args);
-                if(showAll){
-                  MainProcess.reasonOp(con, sp, online, args);
-                }
-              });
-            }else{
-              runDb(() -> MainProcess.status(con, sp, true));
-            }
-          }else if( command.getName().equals("isjailed") ) {
+          if( command.getName().equals("isjailed") ) {
             if(args.length != 1){
               return false;
             }
@@ -243,16 +191,6 @@ public class KubotanUtil2 extends JavaPlugin implements Listener{
               return false;
             }
             runDb(() -> MainProcess.unban(this, con, conf, sp, args));
-          }else if( sp.isOp() && command.getName().equals("update") ) {
-            if(args.length != 2){
-              return false;
-            }
-            runDb(() -> MainProcess.upDate(con, sp, args));
-          }else if( sp.isOp() && command.getName().equals("upvalue") ) {
-            if(args.length != 2){
-              return false;
-            }
-            runDb(() -> MainProcess.upValue(con, sp, online, args));
           }
         }
       }

@@ -6,7 +6,9 @@
 
 Plugin for Gorogoro servers.
 
-プレイヤー同士で評価(good / bad)し合い、評価値が 0 未満になったプレイヤーを自動で投獄するプラグインです。投獄・BAN 用のコマンドもあります。
+別のプラグインのコマンドを使って、プレイヤーを投獄・BAN し、その状態を記録するプラグインです。
+
+2.0 で、プレイヤー同士の評価(good / bad)の機能を廃止しました。
 
 # Requirements
 - Paper 1.21.11 以降(1.21.11 未満のサーバーでは読み込まれません)
@@ -20,24 +22,14 @@ Please place the .jar file in the Paper plugins folder.
 
 # Usage
 ```
-/bad <player> <reason>
-/good <player> <reason>
-/status
 /isjailed <player>
 ```
 
-- `/bad` / `/good` — プレイヤーを評価します。理由は必須です(空白を含めない 1 語)
-  - 評価値は 1.000 から始まり、bad で減り、good で増えます。0 未満になると自動で投獄されます
-  - 同じ相手に同じ評価は 1 回だけです。評価したあと、一定時間(既定 1 時間)は評価できません
-- `/status` — 自分の評価値と評価履歴(2021/01/01 以降)を表示します
 - `/isjailed` — 投獄中か・BAN されているかを表示します
 
 管理用のコマンド
 - `/kjail <player>` / `/kunjail <player>` — 投獄 / 釈放します(ミュート・解除を含む)
 - `/kban <player> <reason>` / `/kunban <player>` — BAN / BAN 解除します
-- `/status <player>`(OP) — 他のプレイヤーの評価値と評価履歴を表示します
-- `/update <yyyy-MM-dd> <HH:mm:ss>`(OP) — 自分の最後に評価した日時を書き換えます
-- `/upvalue <player> <value>`(OP) — 評価値を書き換えます
 
 # Permission
 ```
@@ -55,12 +47,11 @@ space.gorogoro.kubotanutil2.kunban
 
 | 項目 | 内容 |
 |---|---|
-| `exex_interval_hour` | 評価してから次に評価できるまでの時間 |
-| `bad_value` / `good_value` | bad / good で増減する評価値 |
 | `jail_command` / `unjail_command` など | 投獄・釈放・ミュート・BAN で実行するコマンド(`%s` に名前などが入ります) |
-| `is_debug` | デバッグ用のメッセージを出す |
 
-評価のデータは `plugins/KubotanUtil2/status.db`(SQLite)に保存されます。
+1.x の `config.yml` にある `exex_interval_hour`・`bad_value`・`good_value`・`is_debug` は使われなくなりました(残っていても動作に影響はありません)。
+
+プレイヤーの名前・UUID と、投獄・BAN の状態は `plugins/KubotanUtil2/status.db`(SQLite)に保存されます。
 
 # Disclaimer
 Do not assume any responsibility by use. Please use it at your own risk.
